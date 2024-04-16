@@ -1,0 +1,219 @@
+﻿@*@page "/"
+
+@using Microsoft.AspNetCore.SignalR.Client
+
+<h1>@hubConnection.State</h1>
+
+<div class="form-group">
+    <label>
+        User:
+        <input @bind="userInput" />
+    </label>
+</div>
+<div class="form-group">
+    <label>
+        Message:
+        <input @bind="messageInput" size="50" />
+    </label>
+</div>
+<button @onclick="SendAsync" disabled="@(!IsConnected)">Send</button>
+
+<ul id="messagesList">
+    @foreach (var message in messages)
+    {
+        <li>@message.Name: @message.Message</li>
+    }
+</ul>
+
+@code {
+    private HubConnection hubConnection; //for connecting to SignalR
+    private List<ClientMessage> messages = new List<ClientMessage>(); //List of messages to display
+    private string userInput; //username
+    private string messageInput; //message
+    private readonly HttpClient _httpClient = new HttpClient(); //HttpClient for posting messages
+
+    private readonly string functionAppBaseUri = "http://localhost:7235/api/"; //URL for function app. Leave this as is for now.
+
+    protected override async Task OnInitializedAsync() //actions to do when the page is initialized
+    {
+        //create a hub connection to the function app as we'll go via the function for everything SignalR.
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(functionAppBaseUri)
+            .Build();
+
+        //Registers handler that will be invoked when the hub method with the specified method name is invoked.
+        hubConnection.On<ClientMessage>("clientMessage", (clientMessage) =>
+        {
+            messages.Add(clientMessage);
+            StateHasChanged(); //This tells Blazor that the UI needs to be updated
+        });
+
+        await hubConnection.StartAsync(); //start connection!
+    }
+
+    //send our message to the function app
+    async Task SendAsync()
+    {
+
+        var msg = new ClientMessage
+            {
+                Name = userInput,
+                Message = messageInput
+            };
+
+        await _httpClient.PostAsJsonAsync($"{functionAppBaseUri}messages", msg); // post to the function app
+        messageInput = string.Empty; // clear the message from the textbox
+        StateHasChanged(); //update the UI
+    }
+
+    //Check we're connected
+    public bool IsConnected =>
+        hubConnection.State == HubConnectionState.Connected;
+
+    public class ClientMessage
+    {
+        public string Name { get; set; }
+        public string Message { get; set; }
+    }
+}
+*@
+
+@page "/"
+
+@using Microsoft.AspNetCore.SignalR.Client
+
+<style>
+    /* CSS classes for sender and receiver messages */
+    .chat-container {
+        max-width: 500px;
+        margin: 20px auto;
+        font-family: Arial, sans-serif;
+    }
+
+    .message-container {
+        overflow-y: auto;
+        max-height: 300px; /* Adjust as needed */
+    }
+
+    .chat-box {
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 10px;
+        margin-bottom: 20px;
+        background-color: #fff;
+    }
+
+    .message {
+        display: block;
+        padding: 8px 15px;
+        margin: 5px;
+        border-radius: 10px;
+        word-wrap: break-word;
+    }
+
+    .sender {
+        background-color: #dcf8c6;
+        text-align: right;
+    }
+
+    .receiver {
+        background-color: #f2f2f2;
+        text-align: left;
+    }
+
+    .form-group {
+        margin-bottom: 10px;
+    }
+
+        .form-group label {
+            font-weight: bold;
+        }
+
+        .form-group input[type="text"] {
+            width: calc(100% - 40px);
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .form-group button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+</style>
+
+<h1>@hubConnection.State</h1>
+
+<div class="chat-container">
+    <div class="chat-box">
+        <div class="message-container">
+            @foreach (var message in messages)
+            {
+                <div class="message @(message.Name == userInput ? "sender" : "receiver")">
+                    <span>@message.Message</span>
+                </div>
+            }
+        </div>
+
+        <div class="form-group">
+            <label for="userInput">User:</label>
+            <input id="userInput" @bind="userInput" type="text" />
+        </div>
+        <div class="form-group">
+            <label for="messageInput">Message:</label>
+            <input id="messageInput" @bind="messageInput" type="text" />
+        </div>
+        <button @onclick="SendAsync" disabled="@(!IsConnected)">Send</button>
+    </div>
+</div>
+
+@code {
+    private HubConnection hubConnection;
+    private List<ClientMessage> messages = new List<ClientMessage>();
+    private string userInput;
+    private string messageInput;
+    private readonly HttpClient _httpClient = new HttpClient();
+
+    private readonly string functionAppBaseUri = "http://localhost:7235/api/";
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(functionAppBaseUri)
+            .Build();
+
+        hubConnection.On<ClientMessage>("clientMessage", (clientMessage) =>
+        {
+            messages.Add(clientMessage);
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    async Task SendAsync()
+    {
+        var msg = new ClientMessage
+            {
+                Name = userInput,
+                Message = messageInput
+            };
+
+        await _httpClient.PostAsJsonAsync($"{functionAppBaseUri}messages", msg);
+        messageInput = string.Empty;
+        StateHasChanged();
+    }
+
+    public bool IsConnected =>
+        hubConnection.State == HubConnectionState.Connected;
+
+    public class ClientMessage
+    {
+        public string Name { get; set; }
+        public string Message { get; set; }
+    }
+}
